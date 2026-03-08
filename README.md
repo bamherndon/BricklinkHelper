@@ -2,6 +2,20 @@
 
 Bulk-orders minifigs from any Bricklink store based on price thresholds, grouped by theme.
 
+---
+
+> [!WARNING]
+> **Bricklink API Rate Limit: 5,000 calls/day**
+>
+> This script makes multiple API calls per run — one call to resolve the store ID, then one call per page of inventory (200 items/page). A store with 1,000 minifigs = ~5 calls per dry run. **Running `--buy` doubles the call count** (inventory fetch + one cart-add call per item added).
+>
+> **Tips to stay under the limit:**
+> - Don't run the script repeatedly back-to-back on large stores.
+> - Avoid scripting or looping automated runs.
+> - If you hit the limit, all API calls will fail until midnight UTC resets your quota.
+
+---
+
 ## How It Works
 
 Calls the Bricklink store's internal JSON API directly using a saved browser session — no DOM scraping. Scans a store's entire minifig inventory, filters by price rules, and prints a breakdown by theme. In `--buy` mode it prompts you theme-by-theme (y/N) before adding anything to cart.
