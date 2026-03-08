@@ -1,0 +1,7 @@
+venv/
+session.json
+__pycache__/
+*.pyc
+api_calls.json
+cart_calls.json
+debug_page.html
