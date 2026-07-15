@@ -33,21 +33,58 @@ DEFAULT_MAX_PRICE = 5.00
 PAGE_SIZE   = 200         # Items per API page (Bricklink max appears to be 500)
 DELAY       = 0.4         # Seconds between cart-add calls — be polite
 
+# Chromium in this environment is prone to renderer crashes on heavy JS
+# pages (e.g. Google/LEGO SSO) without these stability flags.
+LAUNCH_ARGS = ["--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"]
+
 # ── Session ───────────────────────────────────────────────────────────────────
+
+DEBUG_SCREENSHOT = Path(__file__).parent / "login_debug.png"
+
+
+def wait_for_login(page, timeout_s: int = 300):
+    """
+    Poll page.url until it settles on a bricklink.com page that isn't the
+    login flow itself. The modern BrickLink site (v2, React header) has no
+    plain "Sign Out" link to select on, so URL-based detection is used
+    instead: after a successful login (incl. via Google/LEGO SSO redirects)
+    the browser lands back on a bricklink.com URL, e.g. /v2/my.page.
+
+    Also saves a screenshot to DEBUG_SCREENSHOT on every poll so progress
+    can be inspected while this is running in the background.
+    """
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if page.is_closed():
+            raise RuntimeError(
+                "Browser tab closed/crashed while waiting for login. Retry --save-session."
+            )
+        url = page.url
+        try:
+            page.screenshot(path=str(DEBUG_SCREENSHOT))
+        except Exception as e:
+            raise RuntimeError(f"Browser crashed while waiting for login: {e}")
+        on_bricklink = "bricklink.com" in url
+        on_login_flow = "login" in url.lower() or "identity.lego.com" in url or "accounts.google.com" in url
+        if on_bricklink and not on_login_flow:
+            settled_url = url
+            time.sleep(1.5)
+            if page.url == settled_url:
+                return
+        time.sleep(1)
+    raise TimeoutError(f"Login not detected within {timeout_s}s (stuck at {page.url})")
+
 
 def save_session():
     """Open a headed browser, wait for the user to log in, save cookies."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=False, args=LAUNCH_ARGS)
         context = browser.new_context()
         page = context.new_page()
         page.goto("https://www.bricklink.com/login.asp")
         print("Log in to Bricklink in the browser window.")
-        print("Waiting for login (watching for Sign Out link)...")
-        page.wait_for_selector(
-            "a[href*='logout'], a[href*='signOut'], a:has-text('Sign Out'), a:has-text('Log Out')",
-            timeout=300_000,
-        )
+        print("Waiting for login...")
+        wait_for_login(page)
         print("Login detected — saving session...")
         context.storage_state(path=str(SESSION_FILE))
         browser.close()
@@ -82,7 +119,7 @@ def get_store_sid(store_name: str) -> str:
     """
     captured = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, args=LAUNCH_ARGS)
         context = browser.new_context(storage_state=str(SESSION_FILE))
         page = context.new_page()
 

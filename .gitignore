@@ -5,3 +5,6 @@ __pycache__/
 api_calls.json
 cart_calls.json
 debug_page.html
+category_*_items.json
+category_*_wishlist.xml
+login_debug.png
